@@ -1,0 +1,69 @@
+---
+- name: Installing packages
+  apt: 
+    name:
+      - daemon
+      - nginx
+      - ssl-cert
+    state: present 
+    update_cache: yes 
+    cache_valid_time: 3600
+
+- name: copy the initial certificate
+  copy:
+    src: 'certificate.crt'
+    dest: "/etc/ssl/certs/{{target_name}}.crt"
+    owner: root
+    group: root
+    force: no
+
+- name: copy the initial private key
+  copy:
+    src: 'private-key.key'
+    dest: "/etc/ssl/private/{{target_name}}.key"
+    owner: root
+    group: root
+    mode: 0600
+    force: no
+
+## And also the Diffie Hellman parameters
+- name: copy the dhparams
+  copy:
+    src: 'dhparams.pem'
+    dest: "/etc/ssl/private/dhparams.pem"
+    owner: root
+    group: root
+    mode: 0600
+
+- name: Copy configuration
+  template:
+    src: "nginx-config.j2"
+    dest: "/etc/nginx/sites-available/{{target_name}}"
+  notify:
+    - restart nginx
+
+- name: Remove default nginx site
+  file: 
+    state: absent 
+    path: "/etc/nginx/sites-enabled/default"
+  notify:
+    - restart nginx
+
+- name: Make nginx site link
+  file: 
+    state: link 
+    src: "/etc/nginx/sites-available/{{target_name}}"
+    dest: "/etc/nginx/sites-enabled/{{target_name}}"
+  notify:
+    - restart nginx
+
+- name: ensure nginx is running
+  service: 
+    name: nginx 
+    state: started
+
+- name: install the reload script for later use
+  copy:
+    src: restart-nginx.sh
+    dest: /root/restart-nginx.sh
+    mode: "0755"

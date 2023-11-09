@@ -1,0 +1,59 @@
+---
+- name: install acme.sh
+  shell: wget -O - https://get.acme.sh | sh
+  args:
+    creates: /root/.acme.sh
+
+- name: get current certificates
+  shell: "/root/.acme.sh/acme.sh --list --listraw | tail -n +2 | grep -P '^\\Q{{target_domain}}\\E\\|'"
+  register: current_certificates
+  failed_when: current_certificates.rc >= 2
+  changed_when: false
+
+- name: verify the current certificates
+  command: "openssl x509 -in /etc/ssl/certs/{{target_name}}.crt -text -noout"
+  ignore_errors: true
+  register: valid_certificates
+  changed_when: false
+
+- name: check if self-signed
+  shell: "openssl x509 -in /etc/ssl/certs/{{target_name}}.crt -subject -issuer -noout | sed -n 's/^\\(subject\\|issuer\\)=//gp' | uniq | wc -l"
+  ignore_errors: true
+  register: issuer_subject_count
+  changed_when: false
+
+## Checked to see the format for >1 additional domain -- turns out it's comma separated
+## We don't need to check for the primary domain, as we won't have current_certificates
+## unless we find it above.
+
+- name: decide what we need to issue
+  set_fact:
+    issue_required: "{{current_certificates.stdout|default() == '' or (current_certificates.stdout.split('|')[2] | regex_replace('^no$', '')) != additional_domains|join(',')}}"
+    install_required: "{{valid_certificates.rc != 0 or issuer_subject_count.stdout == '1'}}"
+
+## It would be nice if, here, we checked all the results from all the different
+## servers, and if necessary, synchronized across data from a known good one.
+
+- name: verify and issue the certificate
+  command: | 
+    /root/.acme.sh/acme.sh --server letsencrypt --issue 
+    -d {{target_domain}}
+    {% for d in additional_domains %} -d '{{d}}' {% endfor %}
+    -w /var/www/html
+  when: issue_required
+  register: acme_result
+
+## There's a timing issue here. We want to do this, but nginx might not yet be installed
+## and the missing service is an issue. The given --reloadcmd might fail. 
+
+- name: install the certificate
+  command: | 
+    /root/.acme.sh/acme.sh --server letsencrypt --install-cert
+    -d {{target_domain}}
+    {% for d in additional_domains %} -d '{{d}}' {% endfor %}
+    --keypath /etc/ssl/private/portal.key
+    --fullchainpath /etc/ssl/certs/portal.crt
+    --reloadcmd  /root/restart-nginx.sh
+  when:
+    - install_required or issue_required
+  register: acme_install_result

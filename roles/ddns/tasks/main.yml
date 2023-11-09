@@ -1,0 +1,50 @@
+---
+- name: install packages
+  apt: 
+    name:
+      - jq
+    state: present 
+    update_cache: yes 
+    cache_valid_time: 3600
+
+- name: create user
+  user:
+    name: "{{ddns_user}}"
+    comment: "{{ddns_user}} ddns user"
+    state: present
+  register: ddns_user_registered
+
+- name: write ddns script
+  copy:
+    src: "ddns.sh"
+    dest: "{{ddns_binary_directory}}/ddns.sh"
+    mode: '0755'
+
+- name: write ddns service file
+  template:
+    src: "ddns.service.j2" 
+    dest: "{{service_file_directory}}/ddns.service" 
+    mode: '0644'
+
+- name: write ddns service timer file
+  template:
+    src: "ddns.timer.j2" 
+    dest: "{{service_file_directory}}/ddns.timer" 
+    mode: '0644'
+
+- name: ensure the tweet service is enabled and running
+  systemd:
+    name: "ddns.service"
+    daemon_reload: yes
+    enabled: yes
+
+- name: ensure the tweet timer is enabled and running
+  systemd:
+    name: "ddns.timer"
+    daemon_reload: yes
+    state: started
+    enabled: yes
+
+- name: check the timers
+  command: systemctl list-timers
+  changed_when: false

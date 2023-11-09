@@ -1,0 +1,5 @@
+---
+target_name: 'portal'
+
+target_domain: 'portal.morungos.com'
+additional_domains: []

@@ -1,0 +1,62 @@
+
+## Handle the initial basic root server, which we only really use for acme 
+## SSL setups.
+
+log_format portal_access     '$remote_addr - $remote_user '
+                             '"$request" $status $body_bytes_sent $request_time '
+                             '"$http_referer" "$http_user_agent" "$request_body"';
+
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_no_server,nohostname portal_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_no_server,nohostname;
+
+  location / {
+    return 444;
+  }
+  location "/.well-known/acme-challenge" {
+    root /var/www/html;
+  }
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name   {{target_domain}} {% for d in additional_domains %} {{d}} {% endfor %};
+
+  access_log  syslog:server=unix:/dev/log,tag=nginx_portal,nohostname portal_access;
+  error_log   syslog:server=unix:/dev/log,tag=nginx_portal,nohostname;
+
+{% include "./templates/nginx-ssl-config.j2" %}
+
+  sendfile on;
+  tcp_nopush on;
+  tcp_nodelay on;
+  server_tokens off;
+
+  gzip on;
+  gzip_vary on;
+  gzip_proxied any;
+  gzip_comp_level 6;
+  gzip_http_version 1.1;
+  gzip_min_length 256;
+  gzip_types application/javascript application/json application/xml font/eot font/otf font/ttf image/svg+xml text/css text/javascript text/plain text/xml;
+  gzip_static on;
+
+  location / {
+    proxy_pass              http://192.168.2.193:8123;
+    proxy_http_version      1.1;
+    proxy_set_header        X-Real-IP $remote_addr;
+    proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header        X-Forwarded-Proto https;
+    proxy_set_header        Host $http_host;
+    proxy_set_header        Upgrade $http_upgrade;
+    proxy_set_header        Connection "upgrade";
+    proxy_connect_timeout   2h;
+    proxy_send_timeout      2h;
+    proxy_read_timeout      2h;
+  }
+}

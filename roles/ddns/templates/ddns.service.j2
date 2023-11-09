@@ -1,0 +1,16 @@
+[Unit]
+Description=DDNS service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ddns.sh
+User={{ddns_user}}
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ddns
+Environment="DIGITALOCEAN_TOKEN={{ digital_ocean_api_key }}"
+Environment="DOMAIN={{ ddns_domain }}"
+Environment="RECORD={{ ddns_record }}"
+
+[Install]
+WantedBy=default.target

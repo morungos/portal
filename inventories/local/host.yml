@@ -1,0 +1,9 @@
+---
+all:
+  children:
+    application:
+      hosts:
+        portal.local:
+  vars:
+    ansible_become_method: sudo
+    public_network_interface: eth0

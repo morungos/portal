@@ -1,0 +1,7 @@
+---
+ddns_user: 'ddns'
+ddns_service_name: 'ddns'
+
+service_file_directory: '/usr/lib/systemd/system'
+
+ddns_binary_directory: "/usr/local/bin"
